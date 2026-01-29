@@ -1,0 +1,1 @@
+gcc -Wall -Wextra -Werror main.c circularBuffer.c -o main
