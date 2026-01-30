@@ -32,7 +32,7 @@ int main(int argc, char *argv[]) {
     // [Hint 2:] While it is possible to directly read from the file to the circular buffer, the logic is 
     // more complicated. The easiest version is to use a secondary linear buffer, with the same size, to where do read operations. 
     char buffer[bufferSize];
-    int sum = 0;
+    long long sum = 0;
 
     // If we work with the binary file
     if (mode == 1) {
@@ -42,8 +42,8 @@ int main(int argc, char *argv[]) {
         int intSize = sizeof(int);
         int usableBytes = bufferSize - (bufferSize % intSize);
         if (usableBytes == 0)
-            usableBytes = intSize;
-
+            close(fd);
+            return 1;
         int n;
 
         while ((n = read(fd, buffer, usableBytes)) > 0) {
@@ -84,18 +84,32 @@ int main(int argc, char *argv[]) {
                 break;
 
             /* Push read bytes into the circular buffer */
-            for (int i = 0; i < bytesRead; i++) {
-                if (buffer_free_bytes(&cb) > 0) {
-                    buffer_push(&cb, buffer[i]);
-                }
+            //for (int i = 0; i < bytesRead; i++) {
+               // if (buffer_free_bytes(&cb) > 0) {
+                 //   break;
+               // }
+              //  buffer_push(&cb, buffer[i]);
+            //}
+            int i = 0;
+        while (i < bytesRead) {
+
+    /* If buffer is full, stop pushing */
+            if (buffer_free_bytes(&cb) == 0){
+                break;
             }
+                
+
+            buffer_push(&cb, buffer[i]);
+            i++;
+}
+
             /*
              * Extract complete elements (numbers) from the circular buffer.
              * buffer_size_next_element tells us when a full number is available.
              */
             int elemSize;
             while ((elemSize =
-                    buffer_size_next_element(&cb, ',', reachedEOF)) > 0) {
+                    buffer_size_next_element(&cb, ',', reachedEOF)) != -1) {
 
                 char numberStr[32];
                 int idx = 0;
