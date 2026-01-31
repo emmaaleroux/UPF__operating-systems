@@ -1,5 +1,5 @@
 // OPERATING SYSTEMS - LAB 1
-// EMMA LEROUX U251606 & GUILLEM ARÉVALO U??????
+// EMMA LEROUX U251606 & GUILLEM ARÉVALO U253098
 
 #include <unistd.h> // read(), write(), close()
 #include <fcntl.h> // open(), O_RDONLY
