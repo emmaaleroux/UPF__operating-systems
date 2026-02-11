@@ -22,22 +22,78 @@
     // sleep 10 
     // EXIT
 
-int main(int argc, char *argv[]) {
-    // GENERAL EXECUTION FLOW
-    while (true) {
-        // It will read a line, and determine the execution mode. 
-        // If it is EXIT it will end the process.
+int main() {
+    char line[1024];
+    while (fgets(line, sizeof(line), stdin)) {
+        line[strcspn(line, "\n")] = '\0';  // remove newline
 
-        // Then it will read the command and arguments in the next line. 
-        // It will create a new process using fork(). 
-        // The child process then replaces its program image by invoking execvp() with the parsed command and its arguments. 
+        if (strcmp(line, "EXIT") == 0) {break;}
 
+        if (strcmp(line, "SINGLE") == 0) {
+            // Then it will read the command and arguments in the next line. 
+            fgets(line, sizeof(line), stdin);
+            line[strcspn(line, "\n")] = '\0';
+            char **cmd = split_command(line);
+            // It will create a new process using fork(). 
+            int pid = fork();
+            if (pid == 0) {
+                // The child process then replaces its program image by invoking execvp() with the parsed command and its arguments. 
+                execvp(cmd[0], cmd);
+                exit(1);
+            } else {
+                wait(NULL);
+            }
+        }
+        if (strcmp(line, "PIPED") == 0) {
             // if it is a PIPED execution, it will need to read a second line and create a second process, 
             // as well as creating the pipe and use dup2() to connect both processes before the execvp. 
+            fgets(line, sizeof(line), stdin);
+            line[strcspn(line, "\n")] = '\0';
+            char **cmd1 = split_command(line);
+
+            fgets(line, sizeof(line), stdin);
+            line[strcspn(line, "\n")] = '\0';
+            char **cmd2 = split_command(line);
+
+            // We create the pipe before the 2 fork()
+            int fd[2];
+            pipe(fd);
+
+            int pid1 = fork();
+            if (pid1 == 0) {
+                dup2(fd[1], STDOUT_FILENO);
+                close(fd[0]); 
+                close(fd[1]);
+                execvp(cmd1[0], cmd1); 
+                exit(1);
+            }
+
+            int pid2 = fork();
+            if (pid2 == 0) {
+                dup2(fd[0], STDIN_FILENO);
+                close(fd[1]); 
+                close(fd[0]);
+                execvp(cmd2[0], cmd2); 
+                exit(1);
+            } 
+
+            close(fd[0]);
+            close(fd[1]);
+            waitpid(pid1, NULL, 0);
+            waitpid(pid2, NULL, 0);
+            
+        }
+        if (strcmp(line, "CONCURRENT") == 0) {
+            continue;
+        }
+        
+        //CircularBuffer cb; // We initialize the circular buffer
+        //buffer_init(&cb, bufferSize);
 
         // If it is not a CONCURRENT execution, use  waitpid() to wait for the previous process (in the case of the piped, you will need to wait for both of them). 
         // Search in the linux documentation how to use waitpid, and how it is slightly different from the wait command seen in class.
     }
+    return 0;
 
 }
 
