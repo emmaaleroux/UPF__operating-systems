@@ -44,7 +44,7 @@ int main() {
                 execvp(cmd[0], cmd);
                 exit(1);
             } else {
-                wait(NULL);
+                waitpid(pid, NULL, 0);
             }
         }
 
@@ -92,11 +92,20 @@ int main() {
             
         }
         if (strcmp(line, "CONCURRENT") == 0) {
-            continue;
+
+            fgets(line, sizeof(line), stdin);
+            line[strcspn(line, "\n")] = '\0';
+            char **cmd = split_command(line);
+
+            int pid = fork();         
+            
+            if (pid == 0) {
+                execvp(cmd[0], cmd);
+                exit(1); // becomes zombie --> how do we avoid it?
+            }
+
         }
         
-        //CircularBuffer cb; // We initialize the circular buffer
-        //buffer_init(&cb, bufferSize);
     }
     return 0;
 
