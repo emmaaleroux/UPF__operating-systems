@@ -3,10 +3,12 @@
 #include <fcntl.h> 
 #include <stdlib.h> 
 #include <string.h> 
+#include <signal.h>
 
 #include "circularBuffer.h"
 #include "splitCommand.h"
 
+#define BUFFER_SIZE 1024
 
 // INPUT SYNTAX
 // (SINGLE | PIPED | CONCURRENT), written in a line, 
@@ -16,31 +18,75 @@
 // INPUT EXAMPLE
     // SINGLE 
     // ls -l /home 
-    // PIPE 
+    // PIPED 
     // ps aux  
     // grep root 
     // CONCURRENT 
     // sleep 10 
     // EXIT
 
-int main() {
-    char line[1024];
-    while (fgets(line, sizeof(line), stdin)) {
-        line[strcspn(line, "\n")] = '\0';  // remove newline
+// Helper function: reading a full line using the circular buffer
+int read_line(int fd, CircularBuffer *cb, char *line, int max_len) {
+    static int reachedEOF = 0;
+    char linearBuf[BUFFER_SIZE];
 
+    while (1) {
+
+        // Check if a full line is already available
+        int line_size = buffer_size_next_element(cb, '\n', reachedEOF);
+        if (line_size > 0) {
+
+            if (line_size > max_len)
+                line_size = max_len;
+
+            for (int i = 0; i < line_size; i++)
+                line[i] = buffer_pop(cb);
+
+            line[line_size - 1] = '\0';  // remove newline
+            return 1; 
+        }
+
+        if (reachedEOF) {return 0;}  // no more input
+
+        int free = buffer_free_bytes(cb);
+        if (free <= 0) {
+            return 0;  // buffer full 
+        }
+        int bytesRead = read(fd, linearBuf, free);
+
+        if (bytesRead == 0) {
+            reachedEOF = 1;
+        } else if (bytesRead < 0) {
+            return 0;
+        } else {
+            for (int i = 0; i < bytesRead; i++) {
+                buffer_push(cb, linearBuf[i]);
+            }
+        }
+    }
+}
+
+
+int main() {
+
+    CircularBuffer cb;
+    buffer_init(&cb, BUFFER_SIZE);
+
+    signal(SIGCHLD, SIG_IGN); // Signal handling for killing zombies
+
+    char line[BUFFER_SIZE];
+
+    while (read_line(0, &cb, line, BUFFER_SIZE)) {
 
         if (strcmp(line, "EXIT") == 0) {break;}
 
-
         if (strcmp(line, "SINGLE") == 0) {
-            // Then it will read the command and arguments in the next line. 
-            fgets(line, sizeof(line), stdin);
-            line[strcspn(line, "\n")] = '\0';
+            
+            if (!read_line(0, &cb, line, BUFFER_SIZE)) {break;}             line[strcspn(line, "\n")] = '\0';
             char **cmd = split_command(line);
-            // It will create a new process using fork(). 
+
             int pid = fork();
             if (pid == 0) {
-                // The child process then replaces its program image by invoking execvp() with the parsed command and its arguments. 
                 execvp(cmd[0], cmd);
                 exit(1);
             } else {
@@ -52,8 +98,8 @@ int main() {
         if (strcmp(line, "PIPED") == 0) {
             // if it is a PIPED execution, it will need to read a second line and create a second process, 
             // as well as creating the pipe and use dup2() to connect both processes before the execvp. 
-            fgets(line, sizeof(line), stdin);
-            line[strcspn(line, "\n")] = '\0';
+            
+            if (!read_line(0, &cb, line, BUFFER_SIZE)) {break;}
             char **cmd1 = split_command(line);
 
             // We create the pipe before the 2 fork()
@@ -69,8 +115,7 @@ int main() {
                 exit(1);
             } 
 
-            fgets(line, sizeof(line), stdin);
-            line[strcspn(line, "\n")] = '\0';
+            if (!read_line(0, &cb, line, BUFFER_SIZE)) {break;}
             char **cmd2 = split_command(line);
 
             int pid2 = fork();
@@ -88,27 +133,25 @@ int main() {
             // (in the case of the piped, you will need to wait for both of them).
             waitpid(pid1, NULL, 0);
             waitpid(pid2, NULL, 0);
-
             
         }
         if (strcmp(line, "CONCURRENT") == 0) {
 
-            fgets(line, sizeof(line), stdin);
-            line[strcspn(line, "\n")] = '\0';
+            if (!read_line(STDIN_FILENO, &cb, line, sizeof(line)))
+                break;
+
             char **cmd = split_command(line);
 
-            int pid = fork();         
-            
+            int pid = fork();
             if (pid == 0) {
                 execvp(cmd[0], cmd);
-                exit(1); // becomes zombie --> how do we avoid it?
+                exit(1);
             }
-
         }
         
     }
+    buffer_deallocate(&cb);
     return 0;
-
 }
 
 // HINTS
