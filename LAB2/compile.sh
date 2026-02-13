@@ -1,0 +1,1 @@
+gcc -Wall -Wextra main.c circularBuffer.c splitCommand.c -o main
