@@ -81,7 +81,11 @@ int main() {
             // If there is a full line, we split the command
             char **cmd = split_command(line);
             // Then create a child process to execute it
-            int pid = fork();
+            pid_t pid = fork();
+            if (pid < 0) {
+                perror("Fork failed");
+                exit(1);
+            }
             if (pid == 0) {
                 execvp(cmd[0], cmd);
                 exit(1);
@@ -99,8 +103,16 @@ int main() {
             // We create the pipe
             int fd[2];
             pipe(fd);
+            if (pipe(fd) < 0) {
+                perror("Pipe failed");
+                exit(1);
+            }
             // First process
-            int pid1 = fork();
+            pid_t pid1 = fork();
+            if (pid1 < 0) {
+                perror("Fork failed");
+                exit(1);
+            }
             if (pid1 == 0) {
                 dup2(fd[1], 1);
                 close(fd[0]); 
@@ -112,7 +124,11 @@ int main() {
             if (!read_line(0, &cb, line, BUFFER_SIZE)) {break;}
             char **cmd2 = split_command(line);
             // Second process
-            int pid2 = fork();
+            pid_t pid2 = fork();
+            if (pid2 < 0) {
+                perror("Fork failed");
+                exit(1);
+            }
             if (pid2 == 0) {
                 dup2(fd[0], 0);
                 close(fd[1]); 
@@ -134,8 +150,12 @@ int main() {
             // Reading and splitting the command
             if (!read_line(STDIN_FILENO, &cb, line, sizeof(line))) { break; }
             char **cmd = split_command(line);
+            pid_t pid = fork();
+            if (pid < 0) {
+                perror("Fork failed");
+                exit(1);
+            }
             // Child process
-            int pid = fork();
             if (pid == 0) {
                 execvp(cmd[0], cmd);
                 exit(1);
