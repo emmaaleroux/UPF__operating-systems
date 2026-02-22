@@ -1,3 +1,6 @@
+// OPERATING SYSTEMS P101 - LAB 2
+// EMMA LEROUX 304174 & GUILLEM ARÉVALO 306124
+
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,42 +9,46 @@
 #include <pthread.h>
 #include "parsePGM.h"
 
-#define MAX_BUFF_SIZE 1024
+#define BUFF_SIZE 1024
 
-typedef struct {        // From Hint 2
+// Thread information (parameter)
+typedef struct {  
     char* path; 
-    int offset;         // Offset from the beginning of the file (including header) 
+    int offset; // Offset from the beginning of the file (including header) 
     int bytesToRead; 
     unsigned int* histogram;
     pthread_mutex_t* lock;
 } ThreadInfo;
 
+
 void* thread(void* st) {
     
-    // Cast parameter to the correct struct type 
+    // Cast parameter to correct struct type 
     ThreadInfo* info = (ThreadInfo*) st;
-    // Compute histogram. This is what you will need to do in threads.
-    unsigned char* buffer = malloc(MAX_BUFF_SIZE);
-    int fd = open(info->path, O_RDONLY);
+    // Compute histogram
+    unsigned char buffer[BUFF_SIZE];
+    int fd = open(info->path, O_RDONLY); // Each thread opens the file independently. 
     if (fd < 0) {return NULL;}
     lseek(fd, info->offset, SEEK_SET); // Move the cursor to the start of the data segment
 
-    int remaining = info->bytesToRead;
+    int nBytesRead;
+    for (int i = 0; i < info->bytesToRead; i += BUFF_SIZE) {
+        // Compute what is left to read
+        int toRead;
+        if (info->bytesToRead - i < BUFF_SIZE) {
+            // If at the end, only read the remaining bytes
+            toRead = info->bytesToRead - i;
+        } else { toRead = BUFF_SIZE; }
+        
+        nBytesRead = read(fd, buffer, toRead);
+        if (nBytesRead <= 0) break;
 
-    while (remaining > 0) {
-        // Read either the max buffer size or what's left for this thread
-        int toRead = (remaining > MAX_BUFF_SIZE) ? MAX_BUFF_SIZE : remaining;
-        int nRead = read(fd, buffer, toRead);
-        if (nRead <= 0) break;
-
-        // PROTECT SHARED DATA: Lock before updating histogram
+        // Mutex to avoid race conditions 
         pthread_mutex_lock(info->lock);
-        for (int i = 0; i < nRead; i++) {
-            info->histogram[buffer[i]]++;
+        for (int j = 0; j < nBytesRead; j++) {
+            info->histogram[buffer[j]]++;
         }
         pthread_mutex_unlock(info->lock);
-
-        remaining -= nRead;
     }
 
     close(fd);
@@ -56,11 +63,12 @@ int main(int argc, char* argv[]) {
         _exit(1);
     }
 
+    // We initialize the array of threads and of threads parameters (structs)
     int nThreads = atoi(argv[3]);
     pthread_t threads[nThreads];
     ThreadInfo thread_data[nThreads];
 
-    // Read the header
+    // We read the header
     int width, height;
     int maxval;
     int nBytesHeader = parse_pgm_header(argv[1], &width, &height, &maxval);
@@ -68,16 +76,15 @@ int main(int argc, char* argv[]) {
         perror("Expecting 1 byte ints\n");
         _exit(1);
     }
+    // We create the histogram
     int nPixels = width * height;
-
     int bytesToRead = nPixels / nThreads;
-    // last thread: nPixels - (bytesToRead * (nThreads - 1))
-
-    unsigned int* histogram = malloc(maxval * sizeof(unsigned int));
+    unsigned int* histogram = malloc((maxval) * sizeof(unsigned int));
     for (int i = 0; i < maxval; i++) {
         histogram[i] = 0;
     }
 
+    // We initialize the lock
     pthread_mutex_t lock;
     pthread_mutex_init(&lock, NULL);
 
@@ -85,10 +92,9 @@ int main(int argc, char* argv[]) {
     for (int i = 0; i < nThreads; i++) {
         thread_data[i].histogram = histogram;
         thread_data[i].lock = &lock;
-        // offset for thread i: offset = nBytesHeader + (i * bytesToRead)
         thread_data[i].path = argv[1];
         thread_data[i].offset = nBytesHeader + (i * bytesToRead);
-        // Distribute pixels (handle the remainder for the last thread)
+        // Hhandle remainder pixels for the last thread
         if (i == nThreads - 1) {
             thread_data[i].bytesToRead = nPixels - (i * bytesToRead);
         } else {
@@ -96,7 +102,7 @@ int main(int argc, char* argv[]) {
         }
         pthread_create(&threads[i], NULL, thread, &thread_data[i]);
     }
-
+    // We wait for all threads to finish
     for (int i = 0; i < nThreads; i++) {
         pthread_join(threads[i], NULL);
     }
@@ -108,19 +114,10 @@ int main(int argc, char* argv[]) {
         sprintf(s, "%d,%d\n", i, histogram[i]);
         write(fd_out, s, strlen(s));
     }
+
+    pthread_mutex_destroy(&lock);
+    free(histogram);
     close(fd_out);
-
-    /*
-    The main reads the image metadata, 
-    determines the size of the data segment (excluding the header), 
-    and creates the threads.
-    */
-
-
-    // Hint1: Because file descriptors maintain a shared file pointer, using a single shared descriptor across threads may 
-    // lead to unintended interference. For this reason, it is recommended that each thread opens the file independently. 
-
-
 
     return 0;
 }
