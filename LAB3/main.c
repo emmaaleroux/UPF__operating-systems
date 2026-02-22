@@ -1,4 +1,4 @@
-// OPERATING SYSTEMS P101 - LAB 2
+// OPERATING SYSTEMS P101 - LAB 3
 // EMMA LEROUX 304174 & GUILLEM ARÉVALO 306124
 
 #include <unistd.h>
@@ -43,7 +43,7 @@ void* thread(void* st) {
         nBytesRead = read(fd, buffer, toRead);
         if (nBytesRead <= 0) break;
 
-        // Mutex to avoid race conditions 
+        // Mutex lock to avoid race conditions 
         pthread_mutex_lock(info->lock);
         for (int j = 0; j < nBytesRead; j++) {
             info->histogram[buffer[j]]++;
