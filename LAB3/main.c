@@ -13,21 +13,21 @@
 
 // Thread information (parameter)
 typedef struct {  
-    char* path; 
-    int offset; // Offset from the beginning of the file (including header) 
-    int bytesToRead; 
-    unsigned int* histogram;
-    pthread_mutex_t* lock;
+    char* path;  
+    int offset; // Offset from the beginning of the file (including header) , where thread starts to read
+    int bytesToRead; //how many bytes it reads
+    unsigned int* histogram; //shared histogram array
+    pthread_mutex_t* lock;   //mutex that protects shared data
 } ThreadInfo;
 
 
 void* thread(void* st) {
     
     // Cast parameter to correct struct type 
-    ThreadInfo* info = (ThreadInfo*) st;
+    ThreadInfo* info = (ThreadInfo*) st; //Convert generic pointer to ThreadInfo*
     // Compute histogram
     unsigned char buffer[BUFF_SIZE];
-    int fd = open(info->path, O_RDONLY); // Each thread opens the file independently. 
+    int fd = open(info->path, O_RDONLY); // Each thread opens the file independently., to read only(O_RDONLY)
     if (fd < 0) {return NULL;}
     lseek(fd, info->offset, SEEK_SET); // Move the cursor to the start of the data segment
 
@@ -68,7 +68,7 @@ int main(int argc, char* argv[]) {
     pthread_t threads[nThreads];
     ThreadInfo thread_data[nThreads];
 
-    // We read the header
+    // We read the header, from sequential
     int width, height;
     int maxval;
     int nBytesHeader = parse_pgm_header(argv[1], &width, &height, &maxval);
@@ -94,17 +94,18 @@ int main(int argc, char* argv[]) {
         thread_data[i].lock = &lock;
         thread_data[i].path = argv[1];
         thread_data[i].offset = nBytesHeader + (i * bytesToRead);
-        // Hhandle remainder pixels for the last thread
+        // Handle remainder pixels for the last thread
         if (i == nThreads - 1) {
             thread_data[i].bytesToRead = nPixels - (i * bytesToRead);
         } else {
             thread_data[i].bytesToRead = bytesToRead;
         }
-        pthread_create(&threads[i], NULL, thread, &thread_data[i]);
+        //create thread[i] and start executing, passing thread_data[i] to thread function
+        pthread_create(&threads[i], NULL, thread, &thread_data[i]); //If attr is NULL, then the thread is created with default attributes: joinable(and not detached)
     }
     // We wait for all threads to finish
     for (int i = 0; i < nThreads; i++) {
-        pthread_join(threads[i], NULL);
+        pthread_join(threads[i], NULL); //wait for thread to execute
     }
 
     // Write histogram, so it can be loaded in python with np.loadtxt
