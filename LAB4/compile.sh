@@ -1,0 +1,1 @@
+gcc -Wall -Wextra parsePGM.c main.c -o main
