@@ -33,7 +33,7 @@ int maxval;
 unsigned int* histogram;
 pthread_mutex_t histLock; // Protects histogram
 int offset;
-pthread_mutex_t readLock; // Protects offset
+pthread_mutex_t offsetLock; // Protects offset
 // TERMINATION
 int active_producers = 0; // Producer counter
 int producers_finished = 0; // Flag
@@ -53,13 +53,13 @@ void *producer(void *arg) {
     while (1) {
         unsigned char *block = malloc(BLOCK_SIZE);
 
-        pthread_mutex_lock(&readLock);
+        pthread_mutex_lock(&offsetLock);
         lseek(fd, offset, SEEK_SET);
         int n = read(fd, block, BLOCK_SIZE);
         if (n > 0) {
             offset += n;
         }
-        pthread_mutex_unlock(&readLock);
+        pthread_mutex_unlock(&offsetLock);
         if (n <= 0) {
             free(block);
             break; // Producers finish when EOF (n <= 0)
@@ -185,7 +185,7 @@ int main(int argc, char* argv[]) {
     histogram = calloc(maxval, sizeof(unsigned int));
     // We initialize the locks
     pthread_mutex_init(&histLock, NULL);  
-    pthread_mutex_init(&readLock, NULL);
+    pthread_mutex_init(&offsetLock, NULL);
     pthread_mutex_init(&termLock, NULL);
 
     active_producers = nProd;
