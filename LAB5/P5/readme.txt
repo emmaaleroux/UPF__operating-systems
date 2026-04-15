@@ -1,0 +1,1 @@
+Copy all this files (overwriting) to the egos-2000 folder with the code, and you will be able to run it using make qemu (follow the instructions in the practice statement)
